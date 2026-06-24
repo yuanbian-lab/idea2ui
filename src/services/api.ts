@@ -1,4 +1,5 @@
 import type { Message, ModelConfig } from '../types'
+import { modelConfig } from '../stores/app'
 
 export async function chat(
   messages: Message[],
@@ -51,4 +52,19 @@ export async function fetchProject(name: string): Promise<{ html: string; css: s
   const resp = await fetch(`/api/projects/${name}`)
   if (!resp.ok) throw new Error('获取项目失败')
   return resp.json()
+}
+
+export async function loadConfig(): Promise<void> {
+  const resp = await fetch('/api/config')
+  if (!resp.ok) return
+  const data = await resp.json()
+  Object.assign(modelConfig, data)
+}
+
+export async function saveConfig(): Promise<void> {
+  await fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...modelConfig }),
+  })
 }

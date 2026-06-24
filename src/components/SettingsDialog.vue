@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { modelConfig } from '../stores/app'
+import { saveConfig } from '../services/api'
 
 const visible = defineModel<boolean>('visible')
 
@@ -23,10 +24,15 @@ function handleProviderChange(value: string) {
     }
   }
 }
+
+async function handleClose() {
+  visible.value = false
+  await saveConfig()
+}
 </script>
 
 <template>
-  <a-modal v-model:visible="visible" title="模型配置" width="520" :footer="null">
+  <a-modal :visible="visible" title="模型配置" width="520" :footer="null" @ok="handleClose" @cancel="handleClose">
     <a-form layout="vertical">
       <a-form-item label="服务商">
         <a-select

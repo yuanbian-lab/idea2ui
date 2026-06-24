@@ -1,6 +1,12 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import ChatPanel from '../components/ChatPanel.vue'
 import PreviewPanel from '../components/PreviewPanel.vue'
+import { loadConfig } from '../services/api'
+
+onMounted(() => {
+  loadConfig()
+})
 </script>
 
 <template>
