@@ -1,4 +1,4 @@
-# PRD: idea2ui
+# PRD: idea2ui — v2.0
 
 ## 1. 产品概述
 
@@ -40,7 +40,59 @@
 - UI 组件库：antd
 - 项目自身样式方案：CSS Modules 或 Tailwind CSS
 
-## 5. 交付物
+## 5. 后端架构
 
-- 可运行的 idea2ui 应用
+### 技术栈
+- 语言：Python
+- Web 框架：FastAPI
+- HTTP 客户端：httpx（用于调用 LLM API）
+- 运行方式：Uvicorn ASGI 服务器
+
+### 接口设计
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | /api/chat | 发送对话消息，返回 AI 生成的 HTML/CSS/JS |
+| POST | /api/export | 导出生成的 UI 文件到输出目录 |
+| GET | /api/projects | 列出所有已导出的项目 |
+| GET | /api/projects/{name} | 读取指定项目的文件内容 |
+| GET | /api/health | 健康检查 |
+
+### AI 集成流程
+
+1. 前端收集用户消息 + 对话历史 + 模型配置（API Key、模型名、Base URL）
+2. 前端通过 `/api/chat` 发送给后端
+3. 后端构造 system prompt + 对话历史，调用 LLM API
+4. LLM 返回结构化 JSON（reply + html + css + js）
+5. 后端解析后返回给前端
+6. 前端更新对话列表和预览面板
+
+### 上下文管理
+- 每次对话携带完整消息历史
+- 若用户已有手动调整的版本，作为 `modified_code` 字段发送给 LLM
+
+### 文件导出
+- 导出路径通过 `IDEA2UI_OUTPUT_DIR` 环境变量配置（默认 `output/`）
+- 每个项目导出为独立文件夹，包含 index.html / style.css / script.js
+
+### 目录结构
+
+```
+server/
+├── main.py               # 应用入口，CORS 配置
+├── config.py             # 环境变量配置
+├── requirements.txt      # Python 依赖
+├── models/
+│   └── schemas.py        # Pydantic 请求/响应模型
+├── routers/
+│   ├── chat.py           # AI 对话接口
+│   └── files.py          # 文件导出与读取接口
+└── services/
+    ├── llm.py            # LLM API 调用
+    └── file_manager.py   # 文件管理
+```
+
+## 6. 交付物
+
+- 可运行的 idea2ui 应用（前端 + 后端）
 - 产出文件夹用于保存生成的 UI 文件
