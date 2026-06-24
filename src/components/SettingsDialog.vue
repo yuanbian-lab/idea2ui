@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { message } from 'ant-design-vue'
 import { modelConfig } from '../stores/app'
 import { saveConfig } from '../services/api'
 
 const visible = defineModel<boolean>('visible')
+const saving = ref(false)
 
 const providers = [
   { label: 'OpenAI', value: 'openai', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'], baseUrl: 'https://api.openai.com/v1' },
@@ -25,14 +27,21 @@ function handleProviderChange(value: string) {
   }
 }
 
-async function handleClose() {
-  visible.value = false
-  await saveConfig()
+async function handleSave() {
+  saving.value = true
+  try {
+    await saveConfig()
+    message.success('配置已保存')
+  } catch {
+    message.error('保存失败')
+  } finally {
+    saving.value = false
+  }
 }
 </script>
 
 <template>
-  <a-modal :visible="visible" title="模型配置" width="520" :footer="null" @ok="handleClose" @cancel="handleClose">
+  <a-modal v-model:visible="visible" title="模型配置" width="520" @ok="handleSave" @cancel="() => visible = false">
     <a-form layout="vertical">
       <a-form-item label="服务商">
         <a-select
@@ -60,5 +69,9 @@ async function handleClose() {
         <a-input v-model:value="modelConfig.baseUrl" placeholder="https://api.openai.com/v1" />
       </a-form-item>
     </a-form>
+    <template #footer>
+      <a-button @click="visible = false">取消</a-button>
+      <a-button type="primary" :loading="saving" @click="handleSave">保存</a-button>
+    </template>
   </a-modal>
 </template>
