@@ -5,7 +5,8 @@ import {
   ExportOutlined,
   FullscreenOutlined,
 } from '@ant-design/icons-vue'
-import { generatedCode, phase, prdContent } from '../stores/app'
+import { generatedCode, phase, prdContent, thinking } from '../stores/app'
+import { marked } from 'marked'
 import { exportFiles } from '../services/api'
 
 const iframeRef = ref<HTMLIFrameElement>()
@@ -26,6 +27,11 @@ const previewSrcDoc = computed(() => {
   <script>${generatedCode.js}<\/script>
 </body>
 </html>`
+})
+
+const prdHtml = computed(() => {
+  if (!prdContent.value) return ''
+  return marked(prdContent.value)
 })
 
 function handleRefresh() {
@@ -85,8 +91,12 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
       </div>
     </div>
     <div class="preview-content">
+      <div v-if="thinking.value" class="loading-overlay">
+        <a-spin size="large" />
+        <p>AI 正在生成中...</p>
+      </div>
       <div v-if="showPrd" class="prd-viewer">
-        <div class="prd-render" v-html="prdContent"></div>
+        <div class="prd-render" v-html="prdHtml"></div>
       </div>
       <iframe
         v-else-if="previewSrcDoc"
@@ -95,7 +105,7 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
         class="preview-iframe"
         sandbox="allow-scripts"
       />
-      <div v-else class="preview-empty">
+      <div v-else-if="!thinking.value" class="preview-empty">
         <div class="empty-icon">🎨</div>
         <p>在左侧描述你的需求，AI 生成的界面将显示在这里</p>
       </div>
@@ -168,12 +178,30 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
   color: #333;
 }
 
-.prd-render h1 { font-size: 24px; margin-bottom: 16px; }
+.prd-render h1 { font-size: 24px; margin-bottom: 16px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
 .prd-render h2 { font-size: 20px; margin: 24px 0 12px; }
 .prd-render h3 { font-size: 16px; margin: 16px 0 8px; }
 .prd-render p { margin: 8px 0; }
 .prd-render ul, .prd-render ol { padding-left: 20px; margin: 8px 0; }
 .prd-render li { margin: 4px 0; }
-.prd-render code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+.prd-render code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #d63384; }
 .prd-render pre { background: #f5f5f5; padding: 16px; border-radius: 8px; overflow-x: auto; }
+.prd-render pre code { background: none; padding: 0; color: inherit; }
+.prd-render table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+.prd-render th, .prd-render td { border: 1px solid #e0e0e0; padding: 8px 12px; text-align: left; }
+.prd-render th { background: #fafafa; font-weight: 600; }
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.85);
+  z-index: 10;
+  gap: 16px;
+  color: #666;
+  font-size: 14px;
+}
 </style>

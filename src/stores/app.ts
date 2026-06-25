@@ -38,6 +38,8 @@ export const pages = reactive<{ value: PageInfo[] }>({ value: [] })
 
 export const currentPage = reactive<{ value: string | null }>({ value: null })
 
+export const thinking = reactive<{ value: boolean }>({ value: false })
+
 export function addMessage(role: 'user' | 'assistant', content: string) {
   messages.push({
     id: Date.now().toString(),

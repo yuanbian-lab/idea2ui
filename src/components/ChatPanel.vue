@@ -13,6 +13,7 @@ import {
   confirmPrd,
   setPageGenerated,
   reset,
+  thinking,
 } from '../stores/app'
 import { chat } from '../services/api'
 import SettingsDialog from './SettingsDialog.vue'
@@ -43,6 +44,7 @@ async function handleSend() {
   input.value = ''
   scrollToBottom()
   sending.value = true
+  thinking.value = true
 
   try {
     const mode = phase.value === 'page_generation' ? 'page' : 'prd'
@@ -87,6 +89,7 @@ async function handleSend() {
     addMessage('assistant', `请求失败: ${e.message}`)
   } finally {
     sending.value = false
+    thinking.value = false
     scrollToBottom()
   }
 }
@@ -118,6 +121,14 @@ function handleStart() {
       <div v-for="msg in messages" :key="msg.id" class="message-wrapper" :class="msg.role">
         <div class="avatar">{{ msg.role === 'user' ? 'U' : 'AI' }}</div>
         <div class="bubble">{{ msg.content }}</div>
+      </div>
+      <div v-if="thinking.value" class="message-wrapper assistant">
+        <div class="avatar">AI</div>
+        <div class="bubble thinking-bubble">
+          <span class="thinking-dot"></span>
+          <span class="thinking-dot"></span>
+          <span class="thinking-dot"></span>
+        </div>
       </div>
       <div v-if="messages.length === 0" class="empty-state">
         <div class="empty-icon">💡</div>
@@ -266,6 +277,29 @@ function handleStart() {
   color: #999;
   max-width: 280px;
   margin-bottom: 16px;
+}
+
+.thinking-bubble {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.thinking-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #999;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
 }
 
 .prd-actions {
