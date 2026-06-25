@@ -158,7 +158,8 @@ def _parse_response(text: str) -> dict:
     if result.get("type") or result.get("reply") or result.get("html"):
         return result
 
-    raise ValueError(f"AI 返回无法解析的内容: {cleaned[:500]}")
+    # If nothing worked, treat the entire response as a plain text reply
+    return {"type": "page", "reply": cleaned[:2000], "html": "", "css": "", "js": ""}
 
 
 async def chat_completion(
