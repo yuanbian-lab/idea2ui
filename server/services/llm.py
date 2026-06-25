@@ -21,7 +21,9 @@ Rules:
 - If the user is still discussing the product idea, respond naturally with type="prd" and keep prd/pages empty
 - When the user has given enough information, generate a complete PRD in Markdown
 - The PRD must list all pages that need to be built
-- Pages list should contain the names of all pages defined in the PRD"""
+- Pages list should contain the names of all pages defined in the PRD
+- IMPORTANT: All string values in JSON must be properly escaped. Escape double quotes inside strings as \\", newlines as \\n, tabs as \\t.
+"""
 
 PAGE_PROMPT = """You are a UI generator. Your task is to generate a single web page based on the PRD and the user's specific requirements.
 
@@ -40,7 +42,90 @@ Rules:
 - JS: all interactive logic
 - The page should be visually polished, modern, and well-designed
 - Use semantic HTML elements
-- Make sure the design is responsive"""
+- Make sure the design is responsive
+- IMPORTANT: All string values in JSON must be properly escaped. Escape double quotes inside strings as \\", newlines as \\n, tabs as \\t."""
+
+
+def _extract_string(text: str, pos: int) -> tuple[str, int]:
+    """Extract a JSON string value starting at pos (which should point to the opening quote).
+    Returns (value, end_position) where end_position is past the closing quote."""
+    if text[pos] != '"':
+        return "", pos
+    pos += 1
+    chars = []
+    while pos < len(text):
+        c = text[pos]
+        if c == '\\':
+            pos += 1
+            if pos < len(text):
+                chars.append(text[pos])
+                pos += 1
+        elif c == '"':
+            return "".join(chars), pos + 1
+        else:
+            chars.append(c)
+            pos += 1
+    return "".join(chars), pos
+
+
+def _extract_array(text: str, pos: int) -> tuple[list, int]:
+    """Extract a JSON array starting at pos (should point to '[')."""
+    items = []
+    if text[pos] != '[':
+        return items, pos
+    pos += 1
+    while pos < len(text) and text[pos] != ']':
+        c = text[pos]
+        if c == '"':
+            val, pos = _extract_string(text, pos)
+            items.append(val)
+        elif c == ',':
+            pos += 1
+        else:
+            pos += 1
+    return items, pos + 1 if pos < len(text) else pos
+
+
+def _lenient_parse(text: str) -> dict:
+    """Parse known JSON structure field by field using a state machine.
+    Handles HTML/CSS/JS content with unescaped characters."""
+    result = {}
+    i = text.find("{")
+    if i == -1:
+        return result
+    i += 1
+
+    known_keys = ["type", "reply", "html", "css", "js", "prd", "pages"]
+
+    while i < len(text):
+        # Skip whitespace and punctuation
+        while i < len(text) and text[i] in " \t\n\r,}":
+            i += 1
+        if i >= len(text) or text[i] == '}':
+            break
+
+        # Extract key
+        if text[i] == '"':
+            key, i = _extract_string(text, i)
+        else:
+            i += 1
+            continue
+
+        # Skip colon
+        while i < len(text) and text[i] in " \t\n\r:":
+            i += 1
+
+        # Extract value based on type
+        if key in ("pages",):
+            val, i = _extract_array(text, i)
+            result[key] = val
+        elif i < len(text) and text[i] == '"':
+            val, i = _extract_string(text, i)
+            result[key] = val
+        else:
+            i += 1
+
+    return result
 
 
 def _parse_response(text: str) -> dict:
@@ -52,17 +137,28 @@ def _parse_response(text: str) -> dict:
     cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE)
     cleaned = cleaned.strip()
 
+    # Try strict JSON parse first
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        idx = cleaned.find("{")
-        end = cleaned.rfind("}")
-        if idx != -1 and end > idx:
-            try:
-                return json.loads(cleaned[idx : end + 1])
-            except json.JSONDecodeError:
-                pass
-        raise ValueError(f"AI 返回无法解析的内容: {cleaned[:500]}")
+        pass
+
+    # Fallback: extract {...} block and try strict
+    idx = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if idx != -1 and end > idx:
+        block = cleaned[idx : end + 1]
+        try:
+            return json.loads(block)
+        except json.JSONDecodeError:
+            pass
+
+    # Final fallback: lenient state machine
+    result = _lenient_parse(cleaned)
+    if result.get("type") or result.get("reply") or result.get("html"):
+        return result
+
+    raise ValueError(f"AI 返回无法解析的内容: {cleaned[:500]}")
 
 
 async def chat_completion(
