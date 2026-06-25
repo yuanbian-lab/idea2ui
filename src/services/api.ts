@@ -5,7 +5,16 @@ export async function chat(
   messages: Message[],
   config: ModelConfig,
   modifiedCode: string = '',
-): Promise<{ html: string; css: string; js: string; reply: string }> {
+  mode: string = 'page',
+): Promise<{
+  type: string
+  reply: string
+  html: string
+  css: string
+  js: string
+  prd: string
+  pages: string[]
+}> {
   const resp = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -15,6 +24,7 @@ export async function chat(
       api_key: config.apiKey,
       base_url: config.baseUrl,
       modified_code: modifiedCode,
+      mode,
     }),
   })
   if (!resp.ok) {

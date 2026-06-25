@@ -5,7 +5,7 @@ import {
   ExportOutlined,
   FullscreenOutlined,
 } from '@ant-design/icons-vue'
-import { generatedCode } from '../stores/app'
+import { generatedCode, phase, prdContent } from '../stores/app'
 import { exportFiles } from '../services/api'
 
 const iframeRef = ref<HTMLIFrameElement>()
@@ -56,13 +56,17 @@ function handleFullscreen() {
     iframeRef.value.requestFullscreen?.()
   }
 }
+
+const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value)
 </script>
 
 <template>
   <div class="preview-panel">
     <div class="preview-toolbar">
-      <span class="preview-title">预览</span>
-      <div class="toolbar-actions">
+      <span class="preview-title">
+        {{ showPrd ? 'PRD 文档预览' : '预览' }}
+      </span>
+      <div class="toolbar-actions" v-if="!showPrd">
         <a-tooltip title="刷新预览">
           <a-button type="text" @click="handleRefresh">
             <template #icon><ReloadOutlined /></template>
@@ -81,8 +85,11 @@ function handleFullscreen() {
       </div>
     </div>
     <div class="preview-content">
+      <div v-if="showPrd" class="prd-viewer">
+        <div class="prd-render" v-html="prdContent"></div>
+      </div>
       <iframe
-        v-if="previewSrcDoc"
+        v-else-if="previewSrcDoc"
         ref="iframeRef"
         :srcdoc="previewSrcDoc"
         class="preview-iframe"
@@ -146,4 +153,27 @@ function handleFullscreen() {
   font-size: 64px;
   margin-bottom: 16px;
 }
+
+.prd-viewer {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  background: #fff;
+  padding: 32px 40px;
+}
+
+.prd-render {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #333;
+}
+
+.prd-render h1 { font-size: 24px; margin-bottom: 16px; }
+.prd-render h2 { font-size: 20px; margin: 24px 0 12px; }
+.prd-render h3 { font-size: 16px; margin: 16px 0 8px; }
+.prd-render p { margin: 8px 0; }
+.prd-render ul, .prd-render ol { padding-left: 20px; margin: 8px 0; }
+.prd-render li { margin: 4px 0; }
+.prd-render code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+.prd-render pre { background: #f5f5f5; padding: 16px; border-radius: 8px; overflow-x: auto; }
 </style>

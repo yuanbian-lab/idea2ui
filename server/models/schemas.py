@@ -12,13 +12,17 @@ class ChatRequest(BaseModel):
     api_key: str = ""
     base_url: str = "https://api.openai.com/v1"
     modified_code: str = ""
+    mode: str = "page"
 
 
 class ChatResponse(BaseModel):
-    html: str
-    css: str
-    js: str
-    reply: str
+    type: str = "page"
+    reply: str = ""
+    html: str = ""
+    css: str = ""
+    js: str = ""
+    prd: str = ""
+    pages: list[str] = []
 
 
 class ExportRequest(BaseModel):

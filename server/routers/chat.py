@@ -18,6 +18,7 @@ async def chat(req: ChatRequest):
             api_key=req.api_key,
             base_url=req.base_url,
             modified_code=req.modified_code,
+            mode=req.mode,
         )
         return ChatResponse(**result)
     except Exception as e:
