@@ -98,7 +98,7 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
       </span>
       <div class="toolbar-actions" v-if="!showPrd">
         <!-- Device toolbar -->
-        <div class="device-bar" v-if="phase === 'page_generation'">
+        <div class="device-bar" v-if="phase.value === 'page_generation'">
           <a-button
             v-for="p in presets"
             :key="p.width"

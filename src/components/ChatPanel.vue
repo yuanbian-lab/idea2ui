@@ -170,7 +170,7 @@ function handleStart() {
         </div>
       </div>
 
-      <div v-if="phase === 'platform_select'" class="platform-select">
+      <div v-if="phase.value === 'platform_select'" class="platform-select">
         <p class="select-title">请选择目标平台</p>
         <div class="platform-grid">
           <div
@@ -190,7 +190,7 @@ function handleStart() {
         <a-button type="primary" :disabled="!projectName.trim()" @click="handleStartProject">确定</a-button>
       </div>
 
-      <div v-else-if="messages.length === 0 && phase !== 'platform_select'" class="empty-state">
+      <div v-else-if="messages.length === 0 && phase.value !== 'platform_select'" class="empty-state">
         <div class="empty-icon">💡</div>
         <p class="empty-title">描述你的想法</p>
         <p class="empty-desc">用自然语言描述你想要的产品，AI 将先为你设计 PRD，再逐页生成 UI</p>
@@ -198,23 +198,23 @@ function handleStart() {
       </div>
     </div>
 
-    <div v-if="phase === 'prd_confirm' && prdContent.value" class="prd-actions">
+    <div v-if="phase.value === 'prd_confirm' && prdContent.value" class="prd-actions">
       <a-button type="primary" @click="handleConfirmPrd">确认 PRD，开始生成页面</a-button>
-      <a-button @click="() => { phase = 'prd_design'; addMessage('assistant', '请告诉我需要修改的地方。') }">继续修改</a-button>
+      <a-button @click="() => { phase.value = 'prd_design'; addMessage('assistant', '请告诉我需要修改的地方。') }">继续修改</a-button>
     </div>
 
     <div class="chat-input">
       <a-textarea
         v-model:value="input"
-        :placeholder="phase === 'page_generation' && currentPage.value
+        :placeholder="phase.value === 'page_generation' && currentPage.value
           ? `请输入「${currentPage.value}」页面的具体要求...`
-          : phase === 'platform_select' ? '请先选择平台...'
+          : phase.value === 'platform_select' ? '请先选择平台...'
           : '描述你的想法...'"
         :rows="3"
-        :disabled="sending || phase === 'platform_select'"
+        :disabled="sending || phase.value === 'platform_select'"
         @pressEnter="handleSend"
       />
-      <a-button type="primary" :disabled="!input.trim() || sending || phase === 'platform_select'" :loading="sending" @click="handleSend">
+      <a-button type="primary" :disabled="!input.trim() || sending || phase.value === 'platform_select'" :loading="sending" @click="handleSend">
         <template #icon><SendOutlined /></template>
         发送
       </a-button>
