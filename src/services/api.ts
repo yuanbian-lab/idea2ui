@@ -17,6 +17,7 @@ export async function chat(
   modifiedCode: string = '',
   mode: string = 'page',
   projectId: string = '',
+  currentPage: string = '',
 ): Promise<ChatApiResponse> {
   const resp = await fetch('/api/chat', {
     method: 'POST',
@@ -29,6 +30,7 @@ export async function chat(
       modified_code: modifiedCode,
       mode,
       project_id: projectId,
+      current_page: currentPage,
     }),
   })
   if (!resp.ok) {

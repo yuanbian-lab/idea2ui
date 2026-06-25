@@ -15,6 +15,7 @@ class ChatRequest(BaseModel):
     modified_code: str = ""
     mode: str = "page"
     project_id: str = ""
+    current_page: str = ""
 
 
 class ChatResponse(BaseModel):

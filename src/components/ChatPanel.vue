@@ -92,6 +92,7 @@ async function handleSend() {
       modified,
       mode,
       currentProjectId.value,
+      currentPage.value || '',
     )
 
     if (result.type === 'prd') {

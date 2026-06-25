@@ -11,9 +11,14 @@ async def chat(req: ChatRequest):
     if not req.api_key:
         raise HTTPException(status_code=400, detail="API Key 未设置")
 
-    # Save user message
+    # Save user message and update current_page
     if req.project_id:
         add_message(req.project_id, role="user", content=req.messages[-1].content if req.messages else "")
+        if req.current_page:
+            project = get_project(req.project_id)
+            if project:
+                project.current_page = req.current_page
+                save_project(project)
 
     try:
         messages = [{"role": m.role, "content": m.content} for m in req.messages]
