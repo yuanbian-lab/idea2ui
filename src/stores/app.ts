@@ -23,10 +23,10 @@ export interface ProjectInfo {
 export const messages = reactive<Message[]>([])
 
 export const modelConfig = reactive<ModelConfig>({
-  provider: 'openai',
-  model: 'gpt-4o',
+  provider: 'deepseek',
+  model: 'deepseek-chat',
   apiKey: '',
-  baseUrl: 'https://api.openai.com/v1',
+  baseUrl: 'https://api.deepseek.com',
 })
 
 export const generatedCode = reactive<{

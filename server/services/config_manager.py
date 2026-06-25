@@ -8,10 +8,10 @@ CONFIG_FILE = OUTPUT_DIR / "config.json"
 def load_config() -> dict:
     if not CONFIG_FILE.exists():
         return {
-            "provider": "openai",
-            "model": "gpt-4o",
+            "provider": "deepseek",
+            "model": "deepseek-chat",
             "apiKey": "",
-            "baseUrl": "https://api.openai.com/v1",
+            "baseUrl": "https://api.deepseek.com",
         }
     return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
 
