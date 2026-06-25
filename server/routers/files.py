@@ -1,3 +1,4 @@
+import traceback
 from fastapi import APIRouter, HTTPException
 from server.models.schemas import ExportRequest, ExportResponse, FileListResponse
 from server.services.file_manager import export_files, list_projects, read_project
@@ -12,6 +13,7 @@ async def export(req: ExportRequest):
         files = [f.name for f in project_dir.iterdir() if f.is_file()]
         return ExportResponse(path=str(project_dir), files=files)
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -1,3 +1,4 @@
+import traceback
 from fastapi import APIRouter, HTTPException
 from server.models.schemas import ChatRequest, ChatResponse
 from server.services.llm import chat_completion
@@ -57,4 +58,5 @@ async def chat(req: ChatRequest):
 
         return reply
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=502, detail=str(e))
