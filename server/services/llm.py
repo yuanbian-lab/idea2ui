@@ -45,10 +45,24 @@ Rules:
 
 def _parse_response(text: str) -> dict:
     cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-    return json.loads(cleaned)
+    if not cleaned:
+        raise ValueError("AI 返回了空内容")
+
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE)
+    cleaned = cleaned.strip()
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        idx = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if idx != -1 and end > idx:
+            try:
+                return json.loads(cleaned[idx : end + 1])
+            except json.JSONDecodeError:
+                pass
+        raise ValueError(f"AI 返回无法解析的内容: {cleaned[:500]}")
 
 
 async def chat_completion(
@@ -84,9 +98,20 @@ async def chat_completion(
     async with httpx.AsyncClient(timeout=120) as client:
         url = f"{base_url.rstrip('/')}/chat/completions"
         resp = await client.post(url, headers=headers, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+
+        raw_text = resp.text
+        if not resp.is_success:
+            raise ValueError(f"API 请求失败 ({resp.status_code}): {raw_text[:500]}")
+
+        try:
+            data = resp.json()
+        except Exception:
+            raise ValueError(f"API 返回非 JSON: {raw_text[:500]}")
+
+    try:
         content = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError):
+        raise ValueError(f"API 响应结构异常: {json.dumps(data, ensure_ascii=False)[:500]}")
 
     result = _parse_response(content)
     result.setdefault("type", mode)
