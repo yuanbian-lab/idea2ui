@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
 class Message(BaseModel):
@@ -13,6 +14,7 @@ class ChatRequest(BaseModel):
     base_url: str = "https://api.openai.com/v1"
     modified_code: str = ""
     mode: str = "page"
+    project_id: str = ""
 
 
 class ChatResponse(BaseModel):
@@ -37,6 +39,39 @@ class ExportResponse(BaseModel):
     files: list[str]
 
 
+class PageInfo(BaseModel):
+    name: str
+    generated: bool = False
+    html: str = ""
+    css: str = ""
+    js: str = ""
+
+
+class ProjectData(BaseModel):
+    id: str
+    name: str = ""
+    platform: str = "web"
+    created_at: float = 0
+    updated_at: float = 0
+    messages: list[Message] = []
+    prd: str = ""
+    pages: list[PageInfo] = []
+    current_page: str = ""
+
+
+class ProjectSummary(BaseModel):
+    id: str
+    name: str
+    platform: str
+    created_at: float
+    updated_at: float
+
+
 class FileListResponse(BaseModel):
     projects: list[str]
     current: str | None = None
+
+
+class ProjectCreateRequest(BaseModel):
+    name: str
+    platform: str = "web"

@@ -7,8 +7,7 @@ def export_files(name: str, html: str, css: str, js: str) -> Path:
     project_dir = OUTPUT_DIR / name
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    (project_dir / "index.html").write_text(
-        f"""<!DOCTYPE html>
+    html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -20,9 +19,8 @@ def export_files(name: str, html: str, css: str, js: str) -> Path:
 {html}
   <script src="script.js"></script>
 </body>
-</html>""",
-        encoding="utf-8",
-    )
+</html>"""
+    (project_dir / "index.html").write_text(html_content, encoding="utf-8")
 
     (project_dir / "style.css").write_text(css, encoding="utf-8")
     (project_dir / "script.js").write_text(js, encoding="utf-8")

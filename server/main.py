@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from server.routers import chat, files, config
+from server.routers import chat, files, config, projects
 from server.config import HOST, PORT
 
 app = FastAPI(title="idea2ui API", version="1.0.0")
@@ -16,6 +16,7 @@ app.add_middleware(
 app.include_router(chat.router)
 app.include_router(files.router)
 app.include_router(config.router)
+app.include_router(projects.router)
 
 
 @app.get("/api/health")

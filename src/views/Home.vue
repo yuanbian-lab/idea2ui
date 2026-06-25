@@ -3,11 +3,28 @@ import { onMounted } from 'vue'
 import ChatPanel from '../components/ChatPanel.vue'
 import PreviewPanel from '../components/PreviewPanel.vue'
 import PageNav from '../components/PageNav.vue'
+import ProjectPanel from '../components/ProjectPanel.vue'
 import { loadConfig } from '../services/api'
-import { generatedCode, pages, currentPage, addMessage } from '../stores/app'
+import { generatedCode, pages, currentPage, addMessage, phase, currentProjectId } from '../stores/app'
+import { listProjects, getProject } from '../services/api'
+import { loadProjectState, projects, resetCurrentProject } from '../stores/app'
 
-onMounted(() => {
-  loadConfig()
+onMounted(async () => {
+  await loadConfig()
+  // Load project list and restore last project
+  try {
+    const list = await listProjects()
+    projects.value = list
+    if (list.length > 0) {
+      // Auto-load most recent project
+      const projectId = list[0].id
+      currentProjectId.value = projectId
+      const project = await getProject(projectId)
+      if (project) {
+        loadProjectState(project)
+      }
+    }
+  } catch {}
 })
 
 async function handlePageSelect(name: string) {
@@ -21,11 +38,19 @@ async function handlePageSelect(name: string) {
     addMessage('assistant', `「${name}」页面尚未生成，请在输入框中描述该页面的具体需求。`)
   }
 }
+
+function handleProjectSelect() {
+  // Re-fetch the current project state after switching
+}
 </script>
 
 <template>
   <div class="home">
-    <ChatPanel class="chat-panel" />
+    <ChatPanel class="chat-panel">
+      <template #header-left>
+        <ProjectPanel @select="handleProjectSelect" />
+      </template>
+    </ChatPanel>
     <div class="right-area">
       <PreviewPanel class="preview-panel" />
       <PageNav @select="handlePageSelect" />

@@ -5,12 +5,25 @@ import {
   ExportOutlined,
   FullscreenOutlined,
 } from '@ant-design/icons-vue'
-import { generatedCode, phase, prdContent, thinking } from '../stores/app'
+import {
+  generatedCode,
+  phase,
+  prdContent,
+  thinking,
+  deviceMode,
+  getDevicePresets,
+  setDevice,
+} from '../stores/app'
 import { marked } from 'marked'
 import { exportFiles } from '../services/api'
 
 const iframeRef = ref<HTMLIFrameElement>()
 const exporting = ref(false)
+const customWidth = ref(deviceMode.width)
+const customHeight = ref(deviceMode.height)
+const showCustom = ref(false)
+
+const presets = computed(() => getDevicePresets())
 
 const previewSrcDoc = computed(() => {
   if (!generatedCode.html && !generatedCode.css && !generatedCode.js) return ''
@@ -63,6 +76,17 @@ function handleFullscreen() {
   }
 }
 
+function handlePresetClick(w: number, h: number, label: string) {
+  setDevice(w, h, label)
+  customWidth.value = w
+  customHeight.value = h
+}
+
+function handleCustomSize() {
+  setDevice(customWidth.value, customHeight.value, `${customWidth.value}×${customHeight.value}`)
+  showCustom.value = false
+}
+
 const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value)
 </script>
 
@@ -73,6 +97,27 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
         {{ showPrd ? 'PRD 文档预览' : '预览' }}
       </span>
       <div class="toolbar-actions" v-if="!showPrd">
+        <!-- Device toolbar -->
+        <div class="device-bar" v-if="phase === 'page_generation'">
+          <a-button
+            v-for="p in presets"
+            :key="p.width"
+            :type="deviceMode.width === p.width && deviceMode.height === p.height ? 'primary' : 'default'"
+            size="small"
+            @click="handlePresetClick(p.width, p.height, `${p.width}×${p.height}`)"
+          >
+            {{ p.width }}×{{ p.height }}
+          </a-button>
+          <a-button size="small" @click="showCustom = !showCustom">
+            {{ deviceMode.label }}
+          </a-button>
+        </div>
+        <div v-if="showCustom" class="custom-size">
+          <a-input-number v-model:value="customWidth" :min="320" :max="2560" size="small" style="width:80px" />
+          <span>×</span>
+          <a-input-number v-model:value="customHeight" :min="240" :max="1600" size="small" style="width:80px" />
+          <a-button size="small" type="primary" @click="handleCustomSize">应用</a-button>
+        </div>
         <a-tooltip title="刷新预览">
           <a-button type="text" @click="handleRefresh">
             <template #icon><ReloadOutlined /></template>
@@ -98,13 +143,17 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
       <div v-if="showPrd" class="prd-viewer">
         <div class="prd-render" v-html="prdHtml"></div>
       </div>
-      <iframe
-        v-else-if="previewSrcDoc"
-        ref="iframeRef"
-        :srcdoc="previewSrcDoc"
-        class="preview-iframe"
-        sandbox="allow-scripts"
-      />
+      <div v-else-if="previewSrcDoc" class="device-frame" :style="{ width: deviceMode.width + 'px', height: deviceMode.height + 'px' }">
+        <div class="device-notch" v-if="deviceMode.width < 500">
+          <span class="notch-status-bar">{{ deviceMode.label }}</span>
+        </div>
+        <iframe
+          ref="iframeRef"
+          :srcdoc="previewSrcDoc"
+          class="preview-iframe"
+          sandbox="allow-scripts"
+        />
+      </div>
       <div v-else-if="!thinking.value" class="preview-empty">
         <div class="empty-icon">🎨</div>
         <p>在左侧描述你的需求，AI 生成的界面将显示在这里</p>
@@ -121,6 +170,8 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
   padding: 8px 16px;
   border-bottom: 1px solid #f0f0f0;
   background: #fff;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .preview-title {
@@ -131,13 +182,36 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
 
 .toolbar-actions {
   display: flex;
+  align-items: center;
   gap: 4px;
+  flex-wrap: wrap;
+}
+
+.device-bar {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 0 8px;
+  border-right: 1px solid #f0f0f0;
+  margin-right: 8px;
+}
+
+.custom-size {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
 }
 
 .preview-content {
   flex: 1;
   position: relative;
-  overflow: hidden;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px;
+  background: #f0f0f0;
 }
 
 .preview-iframe {
@@ -145,6 +219,29 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
   height: 100%;
   border: none;
   background: #fff;
+}
+
+.device-frame {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s, height 0.3s;
+  flex-shrink: 0;
+}
+
+.device-notch {
+  padding: 6px 16px;
+  background: #333;
+  color: #fff;
+  font-size: 11px;
+  text-align: center;
+}
+
+.notch-status-bar {
+  opacity: 0.7;
 }
 
 .preview-empty {

@@ -12,10 +12,13 @@ import {
   currentPage,
   confirmPrd,
   setPageGenerated,
-  reset,
+  resetCurrentProject,
   thinking,
+  currentProjectId,
+  currentPlatform,
 } from '../stores/app'
-import { chat } from '../services/api'
+import { chat, createProject, getProject } from '../services/api'
+import { loadProjectState } from '../stores/app'
 import SettingsDialog from './SettingsDialog.vue'
 
 const input = ref('')
@@ -23,12 +26,42 @@ const listRef = ref<HTMLDivElement>()
 const showSettings = ref(false)
 const sending = ref(false)
 
+// Platform selection state
+const platform = ref(currentPlatform.value || 'web')
+const projectName = ref('')
+const showNameInput = ref(false)
+
+const platforms = [
+  { label: 'Web 端', value: 'web', icon: '🖥️' },
+  { label: '移动网页端', value: 'mobile_web', icon: '📱' },
+  { label: 'App 端', value: 'app', icon: '📲' },
+  { label: '小程序端', value: 'mini_program', icon: '💬' },
+]
+
 function scrollToBottom() {
   nextTick(() => {
     if (listRef.value) {
       listRef.value.scrollTop = listRef.value.scrollHeight
     }
   })
+}
+
+async function handlePlatformSelect(value: string) {
+  platform.value = value
+  showNameInput.value = true
+}
+
+async function handleStartProject() {
+  if (!projectName.value.trim()) return
+  const proj = await createProject(projectName.value.trim(), platform.value)
+  resetCurrentProject()
+  currentProjectId.value = proj.id
+  // Update platform in store as well
+  Object.assign(currentPlatform, { value: platform.value })
+  phase.value = 'prd_design'
+  addMessage('assistant', `项目「${projectName.value}」已创建！请描述你的产品想法，我来帮你设计 PRD 文档。`)
+  showNameInput.value = false
+  projectName.value = ''
 }
 
 async function handleSend() {
@@ -53,7 +86,13 @@ async function handleSend() {
         ? `html:${generatedCode.html}\ncss:${generatedCode.css}\njs:${generatedCode.js}`
         : ''
 
-    const result = await chat([...messages], { ...modelConfig }, modified, mode)
+    const result = await chat(
+      [...messages],
+      { ...modelConfig },
+      modified,
+      mode,
+      currentProjectId.value,
+    )
 
     if (result.type === 'prd') {
       if (result.prd) {
@@ -80,7 +119,7 @@ async function handleSend() {
       if (currentPage.value) {
         setPageGenerated(currentPage.value, result.html, result.css, result.js)
       }
-      if (phase.value === 'idle') {
+      if (phase.value === 'idle' || phase.value === 'platform_select') {
         phase.value = 'page_generation'
       }
       addMessage('assistant', result.reply)
@@ -100,17 +139,16 @@ function handleConfirmPrd() {
 }
 
 function handleStart() {
-  phase.value = 'prd_design'
-  addMessage('assistant', '请描述你的产品想法，我来帮你设计 PRD 文档。')
+  phase.value = 'platform_select'
 }
 </script>
 
 <template>
   <div class="chat-panel">
     <div class="chat-header">
-      <span class="logo">idea2ui</span>
-      <div class="header-actions">
-        <a-button v-if="phase.value !== 'idle'" size="small" @click="reset">新建</a-button>
+      <slot name="header-left" />
+      <div class="header-right">
+        <a-button size="small" @click="handleStart">新建</a-button>
         <a-button type="text" @click="showSettings = true">
           <template #icon><SettingOutlined /></template>
         </a-button>
@@ -122,6 +160,7 @@ function handleStart() {
         <div class="avatar">{{ msg.role === 'user' ? 'U' : 'AI' }}</div>
         <div class="bubble">{{ msg.content }}</div>
       </div>
+
       <div v-if="thinking.value" class="message-wrapper assistant">
         <div class="avatar">AI</div>
         <div class="bubble thinking-bubble">
@@ -130,30 +169,52 @@ function handleStart() {
           <span class="thinking-dot"></span>
         </div>
       </div>
-      <div v-if="messages.length === 0" class="empty-state">
+
+      <div v-if="phase === 'platform_select'" class="platform-select">
+        <p class="select-title">请选择目标平台</p>
+        <div class="platform-grid">
+          <div
+            v-for="p in platforms"
+            :key="p.value"
+            class="platform-card"
+            @click="handlePlatformSelect(p.value)"
+          >
+            <span class="platform-icon">{{ p.icon }}</span>
+            <span>{{ p.label }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="showNameInput" class="name-input-area">
+        <a-input v-model:value="projectName" placeholder="输入项目名称" @pressEnter="handleStartProject" />
+        <a-button type="primary" :disabled="!projectName.trim()" @click="handleStartProject">确定</a-button>
+      </div>
+
+      <div v-else-if="messages.length === 0 && phase !== 'platform_select'" class="empty-state">
         <div class="empty-icon">💡</div>
         <p class="empty-title">描述你的想法</p>
-        <p class="empty-desc">用自然语言描述你想要的界面，AI 将先为你设计 PRD，再逐页生成 UI</p>
+        <p class="empty-desc">用自然语言描述你想要的产品，AI 将先为你设计 PRD，再逐页生成 UI</p>
         <a-button type="primary" @click="handleStart">开始设计</a-button>
       </div>
     </div>
 
-    <div v-if="phase.value === 'prd_confirm' && prdContent.value" class="prd-actions">
+    <div v-if="phase === 'prd_confirm' && prdContent.value" class="prd-actions">
       <a-button type="primary" @click="handleConfirmPrd">确认 PRD，开始生成页面</a-button>
-      <a-button @click="() => { phase.value = 'prd_design'; addMessage('assistant', '请告诉我需要修改的地方。') }">继续修改</a-button>
+      <a-button @click="() => { phase = 'prd_design'; addMessage('assistant', '请告诉我需要修改的地方。') }">继续修改</a-button>
     </div>
 
     <div class="chat-input">
       <a-textarea
         v-model:value="input"
-        :placeholder="phase.value === 'page_generation' && currentPage.value
+        :placeholder="phase === 'page_generation' && currentPage.value
           ? `请输入「${currentPage.value}」页面的具体要求...`
+          : phase === 'platform_select' ? '请先选择平台...'
           : '描述你的想法...'"
         :rows="3"
-        :disabled="sending"
+        :disabled="sending || phase === 'platform_select'"
         @pressEnter="handleSend"
       />
-      <a-button type="primary" :disabled="!input.trim() || sending" :loading="sending" @click="handleSend">
+      <a-button type="primary" :disabled="!input.trim() || sending || phase === 'platform_select'" :loading="sending" @click="handleSend">
         <template #icon><SendOutlined /></template>
         发送
       </a-button>
@@ -167,23 +228,16 @@ function handleStart() {
 .chat-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
+  justify-content: flex-end;
+  padding: 8px 12px;
   border-bottom: 1px solid #f0f0f0;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
   gap: 8px;
 }
 
-.logo {
-  font-size: 18px;
-  font-weight: 700;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .message-list {
@@ -249,6 +303,29 @@ function handleStart() {
   border-bottom-left-radius: 4px;
 }
 
+.thinking-bubble {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.thinking-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #999;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
 .empty-state {
   flex: 1;
   display: flex;
@@ -279,27 +356,51 @@ function handleStart() {
   margin-bottom: 16px;
 }
 
-.thinking-bubble {
+.platform-select {
+  padding: 20px 0;
+}
+
+.select-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.platform-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.platform-card {
   display: flex;
-  gap: 4px;
+  flex-direction: column;
   align-items: center;
-  padding: 12px 16px;
+  gap: 8px;
+  padding: 16px 8px;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 13px;
+  color: #333;
 }
 
-.thinking-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #999;
-  animation: pulse 1.4s ease-in-out infinite;
+.platform-card:hover {
+  border-color: #1677ff;
+  background: #f0f5ff;
 }
 
-.thinking-dot:nth-child(2) { animation-delay: 0.2s; }
-.thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+.platform-icon {
+  font-size: 28px;
+}
 
-@keyframes pulse {
-  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-  40% { opacity: 1; transform: scale(1); }
+.name-input-area {
+  display: flex;
+  gap: 8px;
+  padding: 12px 0;
 }
 
 .prd-actions {

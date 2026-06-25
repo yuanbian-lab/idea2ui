@@ -1,12 +1,7 @@
 import type { Message, ModelConfig } from '../types'
 import { modelConfig } from '../stores/app'
 
-export async function chat(
-  messages: Message[],
-  config: ModelConfig,
-  modifiedCode: string = '',
-  mode: string = 'page',
-): Promise<{
+export interface ChatApiResponse {
   type: string
   reply: string
   html: string
@@ -14,7 +9,15 @@ export async function chat(
   js: string
   prd: string
   pages: string[]
-}> {
+}
+
+export async function chat(
+  messages: Message[],
+  config: ModelConfig,
+  modifiedCode: string = '',
+  mode: string = 'page',
+  projectId: string = '',
+): Promise<ChatApiResponse> {
   const resp = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -25,6 +28,7 @@ export async function chat(
       base_url: config.baseUrl,
       modified_code: modifiedCode,
       mode,
+      project_id: projectId,
     }),
   })
   if (!resp.ok) {
@@ -52,16 +56,41 @@ export async function exportFiles(
   return resp.json()
 }
 
-export async function fetchProjects(): Promise<{ projects: string[]; current: string | null }> {
+export async function listProjects(): Promise<any[]> {
   const resp = await fetch('/api/projects')
   if (!resp.ok) throw new Error('获取项目列表失败')
   return resp.json()
 }
 
-export async function fetchProject(name: string): Promise<{ html: string; css: string; js: string }> {
-  const resp = await fetch(`/api/projects/${name}`)
+export async function createProject(name: string, platform: string): Promise<any> {
+  const resp = await fetch('/api/projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, platform }),
+  })
+  if (!resp.ok) throw new Error('创建项目失败')
+  return resp.json()
+}
+
+export async function getProject(id: string): Promise<any> {
+  const resp = await fetch(`/api/projects/${id}`)
   if (!resp.ok) throw new Error('获取项目失败')
   return resp.json()
+}
+
+export async function updateProject(id: string, data: any): Promise<any> {
+  const resp = await fetch(`/api/projects/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!resp.ok) throw new Error('更新项目失败')
+  return resp.json()
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  const resp = await fetch(`/api/projects/${id}`, { method: 'DELETE' })
+  if (!resp.ok) throw new Error('删除项目失败')
 }
 
 export async function loadConfig(): Promise<void> {
