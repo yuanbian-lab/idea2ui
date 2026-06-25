@@ -2,48 +2,50 @@ import httpx
 import json
 import re
 
-PRD_PROMPT = """You are a product manager and UI designer. Your task is to help the user design a PRD (Product Requirements Document) for their web project.
+PRD_PROMPT = """You are a product manager and UI designer. Help the user design a PRD.
 
-Follow these steps:
+CRITICAL: You MUST output ONLY valid JSON. No other text, no explanation, no markdown, no code fences. Start with { and end with }.
+
+Steps:
 1. Understand the user's product idea
-2. Design the complete page structure (e.g., Home page, Course page, Course Detail page)
+2. Design the complete page structure
 3. For each page, briefly describe its purpose and key UI elements
 
-You must output your response in the following JSON format (no markdown, no code fences, pure JSON only):
+Format:
 {
   "type": "prd",
-  "reply": "对用户需求的回应，或对PRD的说明",
-  "prd": "完整的 PRD 文档内容（Markdown 格式），必须包含各个页面的结构定义",
-  "pages": ["页面名称1", "页面名称2", "页面名称3"]
+  "reply": "response to the user in Chinese",
+  "prd": "complete PRD in Markdown with page structure",
+  "pages": ["Page1", "Page2", "Page3"]
 }
 
 Rules:
-- If the user is still discussing the product idea, respond naturally with type="prd" and keep prd/pages empty
-- When the user has given enough information, generate a complete PRD in Markdown
-- The PRD must list all pages that need to be built
-- Pages list should contain the names of all pages defined in the PRD
-- IMPORTANT: All string values in JSON must be properly escaped. Escape double quotes inside strings as \\", newlines as \\n, tabs as \\t.
+- If user is still discussing, reply naturally with type="prd" and empty prd/pages
+- When enough info gathered, generate complete PRD
+- PRD must list all pages
+- Escape double quotes as \\". Use \\n for newlines.
+- OUTPUT JSON ONLY. No other text.
 """
 
-PAGE_PROMPT = """You are a UI generator. Your task is to generate a single web page based on the PRD and the user's specific requirements.
+PAGE_PROMPT = """You are a UI generator. Generate a single page based on the PRD and user's requirements.
 
-You must output your response in the following JSON format (no markdown, no code fences, pure JSON only):
+CRITICAL: You MUST output ONLY valid JSON. No other text, no explanation, no markdown, no code fences. Start with { and end with }.
+
+Format:
 {
   "type": "page",
-  "reply": "简短说明你生成了什么",
-  "html": "<html body content only, no <html> or <body> tags>",
-  "css": "完整的 CSS 样式",
-  "js": "完整的 JavaScript 代码"
+  "reply": "brief description in Chinese",
+  "html": "complete HTML body content only (NO <html>, <head>, or <body> tags)",
+  "css": "complete CSS styles",
+  "js": "complete JavaScript code"
 }
 
 Rules:
-- HTML: only the content inside <body>, DO NOT include <html>, <head>, or <body> tags
-- CSS: complete styles, including layout, colors, responsive design
+- HTML: only content inside <body>, DO NOT include <html>, <head>, or <body> tags
+- CSS: complete styles, responsive design, visually polished
 - JS: all interactive logic
-- The page should be visually polished, modern, and well-designed
-- Use semantic HTML elements
-- Make sure the design is responsive
-- IMPORTANT: All string values in JSON must be properly escaped. Escape double quotes inside strings as \\", newlines as \\n, tabs as \\t."""
+- IMPORTANT: Escape double quotes as \\" in all string values. Use \\n for newlines.
+- OUTPUT JSON ONLY. No markdown. No code fences. No extra text."""
 
 
 def _extract_string(text: str, pos: int) -> tuple[str, int]:

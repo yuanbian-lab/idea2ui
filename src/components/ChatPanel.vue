@@ -113,17 +113,20 @@ async function handleSend() {
         addMessage('assistant', result.reply)
       }
     } else {
-      generatedCode.html = result.html
-      generatedCode.css = result.css
-      generatedCode.js = result.js
-
-      if (currentPage.value) {
-        setPageGenerated(currentPage.value, result.html, result.css, result.js)
+      if (result.html) {
+        generatedCode.html = result.html
+        generatedCode.css = result.css
+        generatedCode.js = result.js
+        if (currentPage.value) {
+          setPageGenerated(currentPage.value, result.html, result.css, result.js)
+        }
+        if (phase.value === 'idle' || phase.value === 'platform_select') {
+          phase.value = 'page_generation'
+        }
+        addMessage('assistant', result.reply)
+      } else {
+        addMessage('assistant', `AI 未返回代码: ${result.reply}\n请检查 Settings 中的模型配置，确保选择了支持结构化输出的模型（如 deepseek-chat、gpt-4o），或更换服务商重试。`)
       }
-      if (phase.value === 'idle' || phase.value === 'platform_select') {
-        phase.value = 'page_generation'
-      }
-      addMessage('assistant', result.reply)
     }
   } catch (e: any) {
     addMessage('assistant', `请求失败: ${e.message}`)
