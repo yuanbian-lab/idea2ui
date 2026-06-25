@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from server.models.schemas import ChatRequest, ChatResponse
 from server.services.llm import chat_completion
-from server.services.project_manager import add_message, get_project, save_pages
+from server.services.project_manager import add_message, get_project, save_pages, save_project
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -47,7 +47,6 @@ async def chat(req: ChatRequest):
                         project.pages.append(PageInfo(name=name))
                 if result.get("prd"):
                     project.prd = result["prd"]
-                from server.services.project_manager import save_project
                 save_project(project)
 
         # If we got generated code, save it
