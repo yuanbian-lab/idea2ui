@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import {
   ReloadOutlined,
   ExportOutlined,
   FullscreenOutlined,
+  EditOutlined,
+  CloseOutlined,
+  SaveOutlined,
 } from '@ant-design/icons-vue'
 import {
   generatedCode,
@@ -13,20 +16,30 @@ import {
   deviceMode,
   getDevicePresets,
   setDevice,
+  editMode,
+  selectedElement,
+  elementModifications,
+  currentProjectId,
+  currentPage,
+  pages,
 } from '../stores/app'
 import { marked } from 'marked'
-import { exportFiles } from '../services/api'
+import { exportFiles, updateProject } from '../services/api'
+import { getEditorScript } from '../utils/editorInjector'
 
 const iframeRef = ref<HTMLIFrameElement>()
 const exporting = ref(false)
 const customWidth = ref(deviceMode.width)
 const customHeight = ref(deviceMode.height)
 const showCustom = ref(false)
+const saving = ref(false)
+const dirtyCount = ref(0)
 
 const presets = computed(() => getDevicePresets())
 
 const previewSrcDoc = computed(() => {
   if (!generatedCode.html && !generatedCode.css && !generatedCode.js) return ''
+  const editorScript = editMode.value ? getEditorScript() : ''
   return `
 <!DOCTYPE html>
 <html>
@@ -38,6 +51,7 @@ const previewSrcDoc = computed(() => {
 <body>
   ${generatedCode.html}
   <script>${generatedCode.js}<\/script>
+  ${editorScript}
 </body>
 </html>`
 })
@@ -46,6 +60,146 @@ const prdHtml = computed(() => {
   if (!prdContent.value) return ''
   return marked(prdContent.value)
 })
+
+const showEditorPanel = computed(() =>
+  editMode.value && phase.value === 'page_generation' && selectedElement.value
+)
+
+const sel = computed(() => selectedElement.value)
+
+// Edit mode property bindings
+const editBackground = ref('')
+const editBorderRadius = ref('')
+const editColor = ref('')
+const editFontSize = ref('')
+const editTextContent = ref('')
+
+function syncPropsFromSelection() {
+  const s = sel.value
+  if (!s) return
+  editBackground.value = s.styles?.backgroundColor || s.styles?.background || ''
+  editBorderRadius.value = s.styles?.borderRadius || ''
+  editColor.value = s.styles?.color || ''
+  editFontSize.value = s.styles?.fontSize || ''
+  editTextContent.value = s.text || ''
+}
+
+// Message handling from iframe editor
+function handleMessage(e: MessageEvent) {
+  const msg = e.data
+  if (!msg.type || !msg.type.startsWith('editor:')) return
+  const d = msg.data || msg
+
+  switch (msg.type) {
+    case 'editor:ready':
+      if (Object.keys(elementModifications).length > 0) {
+        try {
+          iframeRef.value?.contentWindow?.postMessage({
+            type: 'editor:applyAll',
+            modifications: { ...elementModifications },
+          }, '*')
+        } catch {}
+      }
+      break
+    case 'editor:select':
+      selectedElement.value = d
+      nextTick(syncPropsFromSelection)
+      break
+    case 'editor:drag':
+      if (sel.value?.eid === d.eid) {
+        const cur = { ...sel.value, x: d.x, y: d.y }
+        selectedElement.value = cur
+      }
+      if (d.eid) {
+        if (!elementModifications[d.eid]) elementModifications[d.eid] = {}
+        elementModifications[d.eid].transform = d.transform
+      }
+      break
+    case 'editor:html':
+      handleSaveHtml(d.html)
+      break
+  }
+}
+
+function applyAllProperties() {
+  const s = sel.value
+  if (!s?.eid) return
+  const eid = s.eid
+  const props: Record<string, string> = {}
+
+  if (editBackground.value !== (s.styles?.backgroundColor || s.styles?.background || '')) {
+    props.backgroundColor = editBackground.value
+  }
+  if (editBorderRadius.value !== (s.styles?.borderRadius || '')) {
+    props.borderRadius = editBorderRadius.value
+  }
+  if (editColor.value !== (s.styles?.color || '')) {
+    props.color = editColor.value
+  }
+  if (editFontSize.value !== (s.styles?.fontSize || '')) {
+    props.fontSize = editFontSize.value
+  }
+  if (editTextContent.value !== (s.text || '')) {
+    props.textContent = editTextContent.value
+  }
+
+  if (Object.keys(props).length === 0) return
+  try {
+    iframeRef.value?.contentWindow?.postMessage({ type: 'editor:apply', eid, properties: props }, '*')
+  } catch {}
+  if (!elementModifications[eid]) elementModifications[eid] = {}
+  Object.assign(elementModifications[eid], props)
+  dirtyCount.value++
+}
+
+function handlePropertyBlur() {
+  applyAllProperties()
+}
+
+async function handleSave() {
+  if (saving.value) return
+  saving.value = true
+  try {
+    iframeRef.value?.contentWindow?.postMessage({ type: 'editor:getHtml' }, '*')
+  } catch (e: any) {
+    console.error('保存失败:', e.message)
+    saving.value = false
+  }
+}
+
+async function handleSaveHtml(bodyHtml: string) {
+  try {
+    const cleanHtml = bodyHtml.replace(/<script[\s\S]*?<\/script>/gi, '').trim()
+    generatedCode.html = cleanHtml
+    const page = pages.value.find(p => p.name === currentPage.value)
+    if (page && currentProjectId.value) {
+      page.html = cleanHtml
+      await updateProject(currentProjectId.value, { pages: pages.value.map(p => ({ ...p })) })
+    }
+    Object.keys(elementModifications).forEach(k => delete elementModifications[k])
+    dirtyCount.value = 0
+    editMode.value = false
+    selectedElement.value = null
+  } catch (e: any) {
+    console.error('保存失败:', e.message)
+  } finally {
+    saving.value = false
+  }
+}
+
+function handleCancelEdit() {
+  editMode.value = false
+  selectedElement.value = null
+  Object.keys(elementModifications).forEach(k => delete elementModifications[k])
+  dirtyCount.value = 0
+}
+
+function toggleEditMode() {
+  editMode.value = !editMode.value
+  if (!editMode.value) {
+    selectedElement.value = null
+  }
+}
 
 function handleRefresh() {
   if (iframeRef.value) {
@@ -88,17 +242,20 @@ function handleCustomSize() {
 }
 
 const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value)
+
+onMounted(() => window.addEventListener('message', handleMessage))
+onUnmounted(() => window.removeEventListener('message', handleMessage))
 </script>
 
 <template>
   <div class="preview-panel">
     <div class="preview-toolbar">
       <span class="preview-title">
-        {{ showPrd ? 'PRD 文档预览' : '预览' }}
+        {{ showPrd ? 'PRD 文档预览' : editMode.value ? '✏️ 编辑模式' : '预览' }}
       </span>
       <div class="toolbar-actions" v-if="!showPrd">
         <!-- Device toolbar -->
-        <div class="device-bar" v-if="phase.value === 'page_generation'">
+        <div class="device-bar" v-if="phase.value === 'page_generation' && !editMode.value">
           <a-button
             v-for="p in presets"
             :key="p.width"
@@ -118,6 +275,30 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
           <a-input-number v-model:value="customHeight" :min="240" :max="1600" size="small" style="width:80px" />
           <a-button size="small" type="primary" @click="handleCustomSize">应用</a-button>
         </div>
+
+        <!-- Edit mode toggle -->
+        <template v-if="phase.value === 'page_generation'">
+          <a-button
+            v-if="!editMode.value"
+            size="small"
+            :type="editMode.value ? 'primary' : 'default'"
+            @click="toggleEditMode"
+          >
+            <template #icon><EditOutlined /></template>
+            编辑
+          </a-button>
+          <template v-else>
+            <a-button size="small" @click="handleCancelEdit">
+              <template #icon><CloseOutlined /></template>
+              取消
+            </a-button>
+            <a-button size="small" type="primary" :loading="saving" @click="handleSave">
+              <template #icon><SaveOutlined /></template>
+              保存{{ dirtyCount > 0 ? ` (${dirtyCount})` : '' }}
+            </a-button>
+          </template>
+        </template>
+
         <a-tooltip title="刷新预览">
           <a-button type="text" @click="handleRefresh">
             <template #icon><ReloadOutlined /></template>
@@ -135,6 +316,7 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
         </a-tooltip>
       </div>
     </div>
+
     <div class="preview-content">
       <div v-if="thinking.value" class="loading-overlay">
         <a-spin size="large" />
@@ -143,16 +325,108 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
       <div v-if="showPrd" class="prd-viewer">
         <div class="prd-render" v-html="prdHtml"></div>
       </div>
-      <div v-else-if="previewSrcDoc" class="device-frame" :style="{ width: deviceMode.width + 'px', height: deviceMode.height + 'px' }">
-        <div class="device-notch" v-if="deviceMode.width < 500">
-          <span class="notch-status-bar">{{ deviceMode.label }}</span>
+      <div v-else-if="previewSrcDoc" class="preview-and-props">
+        <div
+          class="device-frame"
+          :style="{ width: deviceMode.width + 'px', height: deviceMode.height + 'px' }"
+          :class="{ 'device-frame-editing': editMode.value }"
+        >
+          <div class="device-notch" v-if="deviceMode.width < 500">
+            <span class="notch-status-bar">{{ deviceMode.label }}</span>
+          </div>
+          <iframe
+            ref="iframeRef"
+            :srcdoc="previewSrcDoc"
+            class="preview-iframe"
+            sandbox="allow-scripts allow-same-origin"
+          />
         </div>
-        <iframe
-          ref="iframeRef"
-          :srcdoc="previewSrcDoc"
-          class="preview-iframe"
-          sandbox="allow-scripts"
-        />
+
+        <!-- Properties Panel (floating right) -->
+        <div v-if="showEditorPanel" class="props-panel">
+          <div class="props-header">
+            <span>✏️ 元素属性</span>
+            <a-button type="text" size="small" @click="selectedElement.value = null">
+              <template #icon><CloseOutlined /></template>
+            </a-button>
+          </div>
+          <div class="props-body">
+            <div class="prop-info">
+              <span class="prop-tag">{{ sel?.tag || '' }}</span>
+              <span class="prop-text" :title="sel?.text">{{ sel?.text || '' }}</span>
+            </div>
+
+            <div class="prop-row">
+              <label>背景色</label>
+              <div class="prop-input-row">
+                <span class="color-swatch" :style="{ background: editBackground || 'transparent' }"></span>
+                <a-input
+                  v-model:value="editBackground"
+                  size="small"
+                  placeholder="透明"
+                  @blur="handlePropertyBlur"
+                  @pressEnter="handlePropertyBlur"
+                />
+              </div>
+            </div>
+
+            <div class="prop-row">
+              <label>圆角</label>
+              <a-input
+                v-model:value="editBorderRadius"
+                size="small"
+                placeholder="0px"
+                @blur="handlePropertyBlur"
+                @pressEnter="handlePropertyBlur"
+              >
+                <template #suffix>px</template>
+              </a-input>
+            </div>
+
+            <div class="prop-row">
+              <label>文字色</label>
+              <div class="prop-input-row">
+                <span class="color-swatch" :style="{ background: editColor || 'inherit' }"></span>
+                <a-input
+                  v-model:value="editColor"
+                  size="small"
+                  placeholder="继承"
+                  @blur="handlePropertyBlur"
+                  @pressEnter="handlePropertyBlur"
+                />
+              </div>
+            </div>
+
+            <div class="prop-row">
+              <label>字号</label>
+              <a-input
+                v-model:value="editFontSize"
+                size="small"
+                placeholder="继承"
+                @blur="handlePropertyBlur"
+                @pressEnter="handlePropertyBlur"
+              >
+                <template #suffix>px</template>
+              </a-input>
+            </div>
+
+            <div class="prop-row">
+              <label>文字</label>
+              <a-input
+                v-model:value="editTextContent"
+                size="small"
+                placeholder="元素文本"
+                @blur="handlePropertyBlur"
+                @pressEnter="handlePropertyBlur"
+              />
+            </div>
+
+            <div class="prop-pos" v-if="sel?.x !== undefined || sel?.transform">
+              <span>拖拽偏移</span>
+              <span class="pos-value">X: {{ Math.round(sel?.x || 0) }}px, Y: {{ Math.round(sel?.y || 0) }}px</span>
+            </div>
+          </div>
+        </div>
       </div>
       <div v-else-if="!thinking.value" class="preview-empty">
         <div class="empty-icon">🎨</div>
@@ -214,6 +488,14 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
   background: #f0f0f0;
 }
 
+.preview-and-props {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+}
+
 .preview-iframe {
   width: 100%;
   height: 100%;
@@ -230,6 +512,11 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
   flex-direction: column;
   transition: width 0.3s, height 0.3s;
   flex-shrink: 0;
+}
+
+.device-frame-editing {
+  box-shadow: 0 4px 24px rgba(22,119,255,0.2);
+  outline: 2px solid #1677ff;
 }
 
 .device-notch {
@@ -300,5 +587,104 @@ const showPrd = computed(() => phase.value === 'prd_confirm' && prdContent.value
   gap: 16px;
   color: #666;
   font-size: 14px;
+}
+
+/* Properties panel */
+.props-panel {
+  width: 240px;
+  flex-shrink: 0;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+.props-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.props-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prop-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 4px;
+}
+
+.prop-tag {
+  background: #1677ff;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.prop-text {
+  color: #666;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.prop-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prop-row label {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
+.prop-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid #d9d9d9;
+  flex-shrink: 0;
+}
+
+.prop-pos {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+  font-size: 12px;
+  color: #999;
+}
+
+.pos-value {
+  font-family: monospace;
+  font-size: 12px;
+  color: #666;
 }
 </style>

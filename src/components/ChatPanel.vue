@@ -17,8 +17,7 @@ import {
   currentProjectId,
   currentPlatform,
 } from '../stores/app'
-import { chat, createProject, getProject } from '../services/api'
-import { loadProjectState } from '../stores/app'
+import { chat, createProject } from '../services/api'
 import SettingsDialog from './SettingsDialog.vue'
 
 const input = ref('')

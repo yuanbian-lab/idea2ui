@@ -24,7 +24,7 @@ function handleClick(name: string) {
         v-for="page in pageList"
         :key="page.name"
         class="nav-tab"
-        :class="{ active: currentPage === page.name, generated: page.generated }"
+        :class="{ active: currentPage.value === page.name, generated: page.generated }"
         @click="handleClick(page.name)"
       >
         <CheckCircleOutlined v-if="page.generated" class="icon-done" />

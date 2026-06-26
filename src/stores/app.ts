@@ -1,6 +1,5 @@
 import { reactive } from 'vue'
 import type { Message, ModelConfig } from '../types'
-import type { ChatApiResponse } from '../services/api'
 
 export type Phase = 'idle' | 'platform_select' | 'prd_design' | 'prd_confirm' | 'page_generation'
 
@@ -60,6 +59,12 @@ export const deviceMode = reactive<{
   height: number
   label: string
 }>({ width: 1440, height: 900, label: 'PC' })
+
+export const editMode = reactive<{ value: boolean }>({ value: false })
+
+export const selectedElement = reactive<{ value: any }>({ value: null })
+
+export const elementModifications = reactive<Record<string, Record<string, string>>>({})
 
 const DEVICE_PRESETS: Record<string, { width: number; height: number }[]> = {
   web: [
@@ -140,7 +145,7 @@ export function loadProjectState(project: any) {
   }
 
   if (project.pages && project.pages.length > 0) {
-    pages.value = project.pages.map(p => ({ ...p }))
+    pages.value = project.pages.map((p: any) => ({ ...p }))
     if (project.current_page) {
       currentPage.value = project.current_page
       const page = pages.value.find(p => p.name === project.current_page)

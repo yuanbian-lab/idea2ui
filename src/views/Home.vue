@@ -5,9 +5,9 @@ import PreviewPanel from '../components/PreviewPanel.vue'
 import PageNav from '../components/PageNav.vue'
 import ProjectPanel from '../components/ProjectPanel.vue'
 import { loadConfig } from '../services/api'
-import { generatedCode, pages, currentPage, addMessage, phase, currentProjectId } from '../stores/app'
+import { generatedCode, pages, addMessage, currentProjectId } from '../stores/app'
 import { listProjects, getProject } from '../services/api'
-import { loadProjectState, projects, resetCurrentProject } from '../stores/app'
+import { loadProjectState, projects } from '../stores/app'
 
 onMounted(async () => {
   await loadConfig()
