@@ -40,12 +40,22 @@ class ExportResponse(BaseModel):
     files: list[str]
 
 
+class PageVersion(BaseModel):
+    label: str
+    timestamp: float = 0
+    html: str = ""
+    css: str = ""
+    js: str = ""
+
+
 class PageInfo(BaseModel):
     name: str
     generated: bool = False
     html: str = ""
     css: str = ""
     js: str = ""
+    current_version: str = ""
+    versions: list[PageVersion] = []
 
 
 class ProjectData(BaseModel):

@@ -3,12 +3,22 @@ import type { Message, ModelConfig } from '../types'
 
 export type Phase = 'idle' | 'platform_select' | 'prd_design' | 'prd_confirm' | 'page_generation'
 
+export interface PageVersion {
+  label: string
+  timestamp: number
+  html: string
+  css: string
+  js: string
+}
+
 export interface PageInfo {
   name: string
   generated: boolean
   html: string
   css: string
   js: string
+  current_version: string
+  versions: PageVersion[]
 }
 
 export interface ProjectInfo {
@@ -118,6 +128,12 @@ export function setPageGenerated(name: string, html: string, css: string, js: st
     page.html = html
     page.css = css
     page.js = js
+    const firstVersion: PageVersion = { label: 'v1', timestamp: Date.now(), html, css, js }
+    if (!page.versions) page.versions = []
+    if (!page.versions.find(v => v.label === 'v1')) {
+      page.versions.unshift(firstVersion)
+    }
+    page.current_version = 'v1'
   }
 }
 
@@ -145,14 +161,28 @@ export function loadProjectState(project: any) {
   }
 
   if (project.pages && project.pages.length > 0) {
-    pages.value = project.pages.map((p: any) => ({ ...p }))
+    pages.value = project.pages.map((p: any) => ({
+      ...p,
+      versions: p.versions || [],
+      current_version: p.current_version || (p.generated ? 'v1' : ''),
+    }))
     if (project.current_page) {
       currentPage.value = project.current_page
       const page = pages.value.find(p => p.name === project.current_page)
       if (page && page.generated) {
-        generatedCode.html = page.html
-        generatedCode.css = page.css
-        generatedCode.js = page.js
+        const targetVersion = page.current_version
+        const ver: PageVersion | undefined = targetVersion
+          ? (page.versions || []).find((v: PageVersion) => v.label === targetVersion)
+          : undefined
+        if (ver) {
+          generatedCode.html = ver.html
+          generatedCode.css = ver.css
+          generatedCode.js = ver.js
+        } else {
+          generatedCode.html = page.html
+          generatedCode.css = page.css
+          generatedCode.js = page.js
+        }
       }
     }
     if (project.prd) {

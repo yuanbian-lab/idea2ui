@@ -7,6 +7,7 @@ import {
   EditOutlined,
   CloseOutlined,
   SaveOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons-vue'
 import {
   generatedCode,
@@ -24,6 +25,7 @@ import {
   pages,
   addMessage,
 } from '../stores/app'
+import type { PageVersion } from '../stores/app'
 import { marked } from 'marked'
 import { exportFiles, updateProject } from '../services/api'
 import { getEditorScript } from '../utils/editorInjector'
@@ -35,6 +37,25 @@ const customHeight = ref(deviceMode.height)
 const showCustom = ref(false)
 const saving = ref(false)
 const dirtyCount = ref(0)
+
+// Save dialog
+const showSaveDialog = ref(false)
+const saveVersionLabel = ref('')
+
+// Version selector
+const currentVersions = computed(() => {
+  const page = pages.value.find(p => p.name === currentPage.value)
+  return (page?.versions || []) as PageVersion[]
+})
+const currentVersionLabel = computed(() => {
+  const page = pages.value.find(p => p.name === currentPage.value)
+  return page?.current_version || ''
+})
+
+function getNextVersionLabel(): string {
+  const count = currentVersions.value.length
+  return `v${count + 1}`
+}
 
 const presets = computed(() => getDevicePresets())
 
@@ -159,14 +180,17 @@ function handlePropertyBlur() {
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null
 
-async function handleSave() {
-  if (saving.value) return
-  if (!iframeRef.value?.contentWindow) {
-    console.error('保存失败: 预览窗口未就绪')
-    return
-  }
+function handleSave() {
+  if (saving.value || !iframeRef.value?.contentWindow) return
+  showSaveDialog.value = true
+  saveVersionLabel.value = getNextVersionLabel()
+}
+
+function handleSaveDialogOk() {
+  if (!saveVersionLabel.value.trim()) return
+  showSaveDialog.value = false
   saving.value = true
-  iframeRef.value.contentWindow.postMessage({ type: 'editor:getHtml' }, '*')
+  iframeRef.value?.contentWindow?.postMessage({ type: 'editor:getHtml' }, '*')
   saveTimeout = setTimeout(() => {
     if (saving.value) {
       saving.value = false
@@ -180,22 +204,52 @@ async function handleSave() {
 async function handleSaveHtml(bodyHtml: string) {
   if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null }
   try {
+    const label = saveVersionLabel.value.trim() || getNextVersionLabel()
     const cleanHtml = bodyHtml.replace(/<script[\s\S]*?<\/script>/gi, '').trim()
-    generatedCode.html = cleanHtml
     const page = pages.value.find(p => p.name === currentPage.value)
-    if (page && currentProjectId.value) {
-      page.html = cleanHtml
-      await updateProject(currentProjectId.value, { pages: pages.value.map(p => ({ ...p })) })
+    if (!page || !currentProjectId.value) {
+      addMessage('assistant', '保存失败: 未找到当前页面或项目。')
+      return
     }
+    generatedCode.html = cleanHtml
+    generatedCode.css = page.css
+    generatedCode.js = page.js
+    const now = Date.now()
+    if (!page.versions) page.versions = []
+    page.versions.push({ label, timestamp: now, html: cleanHtml, css: page.css, js: page.js })
+    page.current_version = label
+    page.html = cleanHtml
+    page.css = page.css
+    page.js = page.js
+    page.generated = true
+    await updateProject(currentProjectId.value, { pages: pages.value.map(p => ({ ...p })) })
     Object.keys(elementModifications).forEach(k => delete elementModifications[k])
     dirtyCount.value = 0
     editMode.value = false
     selectedElement.value = null
+    saveVersionLabel.value = ''
+    addMessage('assistant', `✅ 已保存版本「${label}」`)
   } catch (e: any) {
     console.error('保存失败:', e.message)
+    addMessage('assistant', `保存失败: ${e.message}`)
   } finally {
     saving.value = false
   }
+}
+
+function handleVersionSelect(label: string) {
+  const page = pages.value.find(p => p.name === currentPage.value)
+  if (!page) return
+  const ver = (page.versions || []).find((v: PageVersion) => v.label === label)
+  if (!ver) return
+  generatedCode.html = ver.html
+  generatedCode.css = ver.css
+  generatedCode.js = ver.js
+  page.current_version = label
+  if (currentProjectId.value) {
+    updateProject(currentProjectId.value, { pages: pages.value.map(p => ({ ...p })) }).catch(() => {})
+  }
+  addMessage('assistant', `已切换到版本「${label}」`)
 }
 
 function handleCancelEdit() {
@@ -288,6 +342,20 @@ onUnmounted(() => window.removeEventListener('message', handleMessage))
         </div>
 
         <!-- Edit mode toggle -->
+        <!-- Version selector -->
+        <template v-if="phase.value === 'page_generation' && !editMode.value && currentVersions.length > 0">
+          <span class="version-badge">
+            <HistoryOutlined /> {{ currentVersionLabel }}
+          </span>
+          <a-select
+            v-model:value="currentVersionLabel"
+            size="small"
+            style="width: 130px"
+            :options="currentVersions.map(v => ({ label: v.label, value: v.label }))"
+            @change="handleVersionSelect"
+          />
+        </template>
+
         <template v-if="phase.value === 'page_generation'">
           <a-button
             v-if="!editMode.value"
@@ -305,7 +373,7 @@ onUnmounted(() => window.removeEventListener('message', handleMessage))
             </a-button>
             <a-button size="small" type="primary" :loading="saving" @click="handleSave">
               <template #icon><SaveOutlined /></template>
-              保存{{ dirtyCount > 0 ? ` (${dirtyCount})` : '' }}
+              保存为新版本
             </a-button>
           </template>
         </template>
@@ -444,6 +512,21 @@ onUnmounted(() => window.removeEventListener('message', handleMessage))
         <p>在左侧描述你的需求，AI 生成的界面将显示在这里</p>
       </div>
     </div>
+
+    <!-- Save version dialog -->
+    <a-modal
+      v-model:open="showSaveDialog"
+      title="保存为新版本"
+      @ok="handleSaveDialogOk"
+      :ok-button-props="{ disabled: !saveVersionLabel.trim() }"
+    >
+      <a-input
+        v-model:value="saveVersionLabel"
+        placeholder="输入版本名称，如 v2、优化后"
+        @pressEnter="handleSaveDialogOk"
+      />
+      <div class="save-dialog-hint">保存后将退出编辑模式，可在版本选择器中切换查看历史版本。</div>
+    </a-modal>
   </div>
 </template>
 
@@ -697,5 +780,20 @@ onUnmounted(() => window.removeEventListener('message', handleMessage))
   font-family: monospace;
   font-size: 12px;
   color: #666;
+}
+
+.version-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #999;
+  padding: 0 4px;
+}
+
+.save-dialog-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #999;
 }
 </style>

@@ -104,6 +104,8 @@ async function handleSend() {
             html: '',
             css: '',
             js: '',
+            current_version: '',
+            versions: [],
           }))
         }
         phase.value = 'prd_confirm'
