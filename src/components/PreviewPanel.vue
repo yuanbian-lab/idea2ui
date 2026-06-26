@@ -137,9 +137,6 @@ function handleMessage(e: MessageEvent) {
         elementModifications[d.eid].transform = d.transform
       }
       break
-    case 'editor:html':
-      handleSaveHtml(d.html)
-      break
   }
 }
 
@@ -178,32 +175,30 @@ function handlePropertyBlur() {
   applyAllProperties()
 }
 
-let saveTimeout: ReturnType<typeof setTimeout> | null = null
-
 function handleSave() {
   if (saving.value || !iframeRef.value?.contentWindow) return
   showSaveDialog.value = true
   saveVersionLabel.value = getNextVersionLabel()
 }
 
-function handleSaveDialogOk() {
+async function handleSaveDialogOk() {
   if (!saveVersionLabel.value.trim()) return
   showSaveDialog.value = false
   saving.value = true
-  iframeRef.value?.contentWindow?.postMessage({ type: 'editor:getHtml' }, '*')
-  saveTimeout = setTimeout(() => {
-    if (saving.value) {
-      saving.value = false
-      if (editMode.value) {
-        addMessage('assistant', '保存超时，请确认页面已加载编辑模式后重试。')
-      }
-    }
-  }, 5000)
-}
-
-async function handleSaveHtml(bodyHtml: string) {
-  if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null }
   try {
+    const iframe = iframeRef.value
+    let bodyHtml: string | null = null
+    if (iframe?.contentDocument?.body) {
+      bodyHtml = iframe.contentDocument.body.innerHTML
+    } else if (iframe?.contentWindow?.document?.body) {
+      try {
+        bodyHtml = iframe.contentWindow.document.body.innerHTML
+      } catch {}
+    }
+    if (!bodyHtml) {
+      addMessage('assistant', '保存失败: 无法访问预览页面内容，请尝试刷新后重试。')
+      return
+    }
     const label = saveVersionLabel.value.trim() || getNextVersionLabel()
     const cleanHtml = bodyHtml.replace(/<script[\s\S]*?<\/script>/gi, '').trim()
     const page = pages.value.find(p => p.name === currentPage.value)
