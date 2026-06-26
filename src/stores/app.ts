@@ -161,11 +161,15 @@ export function loadProjectState(project: any) {
   }
 
   if (project.pages && project.pages.length > 0) {
-    pages.value = project.pages.map((p: any) => ({
-      ...p,
-      versions: p.versions || [],
-      current_version: p.current_version || (p.generated ? 'v1' : ''),
-    }))
+    pages.value = project.pages.map((p: any) => {
+      const versions = p.versions || []
+      let cv = p.current_version || ''
+      if (!cv && p.generated && versions.length === 0) {
+        versions.push({ label: 'v1', timestamp: p.updated_at || Date.now(), html: p.html, css: p.css, js: p.js })
+        cv = 'v1'
+      }
+      return { ...p, versions, current_version: cv }
+    })
     if (project.current_page) {
       currentPage.value = project.current_page
       const page = pages.value.find(p => p.name === project.current_page)
