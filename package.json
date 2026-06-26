@@ -1,6 +1,8 @@
 {
   "name": "idea2ui",
-  "private": true,
+  "private": false,
+  "description": "AI-powered UI prototype generator — turn ideas into interactive web prototypes through conversation",
+  "license": "MIT",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
