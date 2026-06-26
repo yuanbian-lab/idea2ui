@@ -8,6 +8,7 @@ import {
   CloseOutlined,
   SaveOutlined,
   HistoryOutlined,
+  CheckCircleFilled,
 } from '@ant-design/icons-vue'
 import {
   generatedCode,
@@ -27,7 +28,8 @@ import {
 } from '../stores/app'
 import type { PageVersion } from '../stores/app'
 import { marked } from 'marked'
-import { exportFiles, updateProject } from '../services/api'
+import { exportFiles, updateProject, downloadProject } from '../services/api'
+import type { DownloadPageItem } from '../services/api'
 import { getEditorScript } from '../utils/editorInjector'
 
 const iframeRef = ref<HTMLIFrameElement>()
@@ -41,6 +43,10 @@ const dirtyCount = ref(0)
 // Save dialog
 const showSaveDialog = ref(false)
 const saveVersionLabel = ref('')
+
+// Download dialog
+const showDownloadDialog = ref(false)
+const downloadSelections = ref<{ name: string; versionLabel: string; enabled: boolean }[]>([])
 
 // Version selector
 const currentVersions = computed(() => {
@@ -284,6 +290,31 @@ async function handleExport() {
   }
 }
 
+function handleOpenDownload() {
+  downloadSelections.value = pages.value.map(p => ({
+    name: p.name,
+    versionLabel: p.current_version || (p.versions?.[0]?.label || ''),
+    enabled: p.generated,
+  }))
+  showDownloadDialog.value = true
+}
+
+async function handleDownloadConfirm() {
+  const selected = downloadSelections.value.filter(s => s.enabled)
+  if (selected.length === 0) return
+  const items: DownloadPageItem[] = []
+  for (const s of selected) {
+    const page = pages.value.find(p => p.name === s.name)
+    if (!page) continue
+    const ver = (page.versions || []).find(v => v.label === s.versionLabel)
+    if (!ver) continue
+    items.push({ name: s.name, version_label: s.versionLabel, html: ver.html, css: ver.css, js: ver.js })
+  }
+  if (items.length === 0) return
+  await downloadProject({ pages: items, prd: prdContent.value || '' })
+  showDownloadDialog.value = false
+}
+
 function handleFullscreen() {
   if (iframeRef.value) {
     iframeRef.value.requestFullscreen?.()
@@ -378,11 +409,15 @@ onUnmounted(() => window.removeEventListener('message', handleMessage))
             <template #icon><ReloadOutlined /></template>
           </a-button>
         </a-tooltip>
-        <a-tooltip title="导出">
+        <a-tooltip title="导出当前页面">
           <a-button type="text" :loading="exporting" @click="handleExport">
             <template #icon><ExportOutlined /></template>
           </a-button>
         </a-tooltip>
+        <a-button size="small" @click="handleOpenDownload" v-if="phase.value === 'page_generation'">
+          <template #icon><ExportOutlined /></template>
+          下载项目
+        </a-button>
         <a-tooltip title="全屏">
           <a-button type="text" @click="handleFullscreen">
             <template #icon><FullscreenOutlined /></template>
@@ -521,6 +556,38 @@ onUnmounted(() => window.removeEventListener('message', handleMessage))
         @pressEnter="handleSaveDialogOk"
       />
       <div class="save-dialog-hint">保存后将退出编辑模式，可在版本选择器中切换查看历史版本。</div>
+    </a-modal>
+
+    <!-- Download dialog -->
+    <a-modal
+      v-model:open="showDownloadDialog"
+      title="下载项目"
+      @ok="handleDownloadConfirm"
+      :ok-button-props="{ disabled: downloadSelections.filter(s => s.enabled).length === 0 }"
+    >
+      <div v-if="prdContent.value" class="download-prd-row">
+        <CheckCircleFilled style="color:#52c41a" />
+        <span>包含 PRD 文档 (PRD.md)</span>
+      </div>
+      <div class="download-page-list">
+        <div
+          v-for="item in downloadSelections"
+          :key="item.name"
+          class="download-page-row"
+          :class="{ disabled: !(pages.value.find((p: any) => p.name === item.name)?.generated) }"
+        >
+          <a-checkbox v-model:checked="item.enabled" />
+          <span class="download-page-name">{{ item.name }}</span>
+          <a-select
+            v-if="item.enabled"
+            v-model:value="item.versionLabel"
+            size="small"
+            style="width: 120px; margin-left: auto"
+            :options="((pages.value.find((p: any) => p.name === item.name)?.versions) || []).map((v: any) => ({ label: v.label, value: v.label }))"
+          />
+        </div>
+      </div>
+      <div class="download-hint">仅已生成的页面可勾选，勾选后可在右侧选择版本。</div>
     </a-modal>
   </div>
 </template>
@@ -787,6 +854,50 @@ onUnmounted(() => window.removeEventListener('message', handleMessage))
 }
 
 .save-dialog-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #999;
+}
+
+.download-prd-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.download-page-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.download-page-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.download-page-row.disabled {
+  opacity: 0.5;
+}
+
+.download-page-name {
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 80px;
+}
+
+.download-hint {
   margin-top: 8px;
   font-size: 12px;
   color: #999;

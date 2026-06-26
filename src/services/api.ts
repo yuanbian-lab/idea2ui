@@ -95,6 +95,30 @@ export async function deleteProject(id: string): Promise<void> {
   if (!resp.ok) throw new Error('删除项目失败')
 }
 
+export interface DownloadPageItem {
+  name: string
+  version_label: string
+  html: string
+  css: string
+  js: string
+}
+
+export async function downloadProject(data: { pages: DownloadPageItem[]; prd: string }): Promise<void> {
+  const resp = await fetch('/api/download', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!resp.ok) throw new Error('下载失败')
+  const blob = await resp.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'project-export.zip'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export async function loadConfig(): Promise<void> {
   const resp = await fetch('/api/config')
   if (!resp.ok) return
