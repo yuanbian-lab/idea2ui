@@ -22,6 +22,7 @@ import {
   currentProjectId,
   currentPage,
   pages,
+  addMessage,
 } from '../stores/app'
 import { marked } from 'marked'
 import { exportFiles, updateProject } from '../services/api'
@@ -156,18 +157,28 @@ function handlePropertyBlur() {
   applyAllProperties()
 }
 
+let saveTimeout: ReturnType<typeof setTimeout> | null = null
+
 async function handleSave() {
   if (saving.value) return
-  saving.value = true
-  try {
-    iframeRef.value?.contentWindow?.postMessage({ type: 'editor:getHtml' }, '*')
-  } catch (e: any) {
-    console.error('保存失败:', e.message)
-    saving.value = false
+  if (!iframeRef.value?.contentWindow) {
+    console.error('保存失败: 预览窗口未就绪')
+    return
   }
+  saving.value = true
+  iframeRef.value.contentWindow.postMessage({ type: 'editor:getHtml' }, '*')
+  saveTimeout = setTimeout(() => {
+    if (saving.value) {
+      saving.value = false
+      if (editMode.value) {
+        addMessage('assistant', '保存超时，请确认页面已加载编辑模式后重试。')
+      }
+    }
+  }, 5000)
 }
 
 async function handleSaveHtml(bodyHtml: string) {
+  if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null }
   try {
     const cleanHtml = bodyHtml.replace(/<script[\s\S]*?<\/script>/gi, '').trim()
     generatedCode.html = cleanHtml
