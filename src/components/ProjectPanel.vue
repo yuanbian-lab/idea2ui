@@ -37,7 +37,10 @@ async function handleCreate() {
 }
 
 async function handleSelect(projectId: string) {
-  if (projectId === 'new') return
+  if (projectId === 'new') {
+    openCreate()
+    return
+  }
   await switchProject(projectId)
   visible.value = false
 }
@@ -83,7 +86,7 @@ function closeCreate() {
           <span class="platform-tag">{{ { web: 'Web', mobile_web: '移动', app: 'App', mini_program: '小程序' }[p.platform] || p.platform }}</span>
         </a-menu-item>
         <a-menu-divider />
-        <a-menu-item key="new" @click="openCreate">
+        <a-menu-item key="new">
           <PlusOutlined /> 新建项目
         </a-menu-item>
       </a-menu>
