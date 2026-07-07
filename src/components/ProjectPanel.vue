@@ -37,15 +37,22 @@ async function handleCreate() {
 }
 
 async function handleSelect(projectId: string) {
+  if (projectId === 'new') return
   await switchProject(projectId)
   visible.value = false
 }
 
 async function switchProject(projectId: string) {
-  const project = await getProject(projectId)
-  resetCurrentProject()
-  currentProjectId.value = project.id
-  loadProjectState(project)
+  try {
+    const project = await getProject(projectId)
+    if (!project) return
+    resetCurrentProject()
+    currentProjectId.value = project.id
+    loadProjectState(project)
+  } catch (e: any) {
+    console.error('切换项目失败:', e.message)
+    return
+  }
   await refreshProjects()
   emit('select')
 }
